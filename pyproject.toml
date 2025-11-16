@@ -33,9 +33,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/adimis-ai/cereon"
-Repository = "https://github.com/adimis-ai/cereon"
-Issues = "https://github.com/adimis-ai/cereon/issues"
+Homepage = "https://github.com/adimis-ai/cereon-sdk"
+Repository = "https://github.com/adimis-ai/cereon-sdk"
+Issues = "https://github.com/adimis-ai/cereon-sdk/issues"
 
 # uv build system (PEP 517)
 [build-system]
