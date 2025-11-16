@@ -26,7 +26,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Update package __version__
-        working-directory: packages/cereon-sdk
+        working-directory: .
         env:
           VERSION: ${{ steps.vars.outputs.version }}
         run: |
@@ -44,7 +44,7 @@ jobs:
           sed -n '1,120p' "$TARGET" || true
 
       - name: Update pyproject.toml version
-        working-directory: packages/cereon-sdk
+        working-directory: .
         env:
           VERSION: ${{ steps.vars.outputs.version }}
         run: |
@@ -64,12 +64,12 @@ jobs:
           python -m pip install --upgrade pip build twine
 
       - name: Build distribution
-        working-directory: packages/cereon-sdk
+        working-directory: .
         run: |
           python -m build
 
       - name: Publish to PyPI
-        working-directory: packages/cereon-sdk
+        working-directory: .
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
