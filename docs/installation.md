@@ -27,7 +27,7 @@ uv add cereon-sdk
 For contributing or development:
 
 ```bash
-git clone https://github.com/adimis-ai/cereon.git
+git clone https://github.com/adimis-ai/cereon-sdk.git
 cd cereon/packages/cereon-sdk
 pip install -e ".[dev]"
 ```
@@ -331,4 +331,4 @@ app.add_middleware(
 
 - Check the [API Reference](api-reference.md) for detailed documentation
 - Browse [examples](examples/) for common patterns
-- Open an issue on [GitHub](https://github.com/adimis-ai/cereon/issues)
+- Open an issue on [GitHub](https://github.com/adimis-ai/cereon-sdk/issues)
