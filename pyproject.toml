@@ -1,0 +1,71 @@
+[project]
+name = "cereon_sdk"
+version = "0.1.0"
+description = "Generic, typed, and streaming FastAPI backend for Cereon Dashboard cards."
+requires-python = ">=3.10"
+authors = [
+  { name = "Aditya Mishra", email = "adimis.sde@gmail.com" }
+]
+readme = "README.md"
+license = { file = "LICENSE" }
+
+keywords = ["fastapi", "streaming", "sse", "websocket", "dashboard", "ndjson", "typed-api"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Framework :: FastAPI",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent"
+]
+
+# Base runtime dependencies
+dependencies = [
+  "fastapi>=0.110.0",
+  "pydantic>=2.6.0",
+  "typing-extensions>=4.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "ruff",
+  "black",
+]
+
+[project.urls]
+Homepage = "https://github.com/adimis-ai/cereon"
+Repository = "https://github.com/adimis-ai/cereon"
+Issues = "https://github.com/adimis-ai/cereon/issues"
+
+# uv build system (PEP 517)
+[build-system]
+requires = ["hatchling>=1.22.0"]
+build-backend = "hatchling.build"
+
+# Formatters / linters
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.isort]
+profile = "black"
+known_first_party = ["cereon_sdk"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I"]
+ignore = ["E501"]
+target-version = "py310"
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_configs = true
+warn_return_any = true
+strict_optional = true
+disallow_untyped_defs = true
+ignore_missing_imports = true

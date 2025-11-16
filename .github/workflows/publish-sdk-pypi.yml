@@ -1,0 +1,77 @@
+name: Publish cereon-sdk to PyPI
+
+on:
+  push:
+    branches:
+      - 'release/*' # branch format: release/0.1.0
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Extract version from branch
+        id: vars
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          VERSION=${BRANCH#release/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update package __version__
+        working-directory: packages/cereon-sdk
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          echo "Setting python package __version__ to ${VERSION} in cereon_sdk/__init__.py"
+          TARGET=cereon_sdk/__init__.py
+          # Replace the __version__ = "..." line
+          if grep -q "__version__" "$TARGET"; then
+            sed -E -i "s/^(__version__\s*=\s*)['\"][0-9A-Za-z.+-]+['\"]$/\1\"${VERSION}\"/" "$TARGET"
+          else
+            # append at end
+            echo "\n__version__=\"${VERSION}\"" >> "$TARGET"
+          fi
+          echo "--- ${TARGET} (after) ---"
+          git --no-pager diff -- "$TARGET" || true
+          sed -n '1,120p' "$TARGET" || true
+
+      - name: Update pyproject.toml version
+        working-directory: packages/cereon-sdk
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          echo "Setting pyproject.toml version to ${VERSION}"
+          PYPROJECT=pyproject.toml
+          if grep -Eq '^version\s*=\s*"[0-9A-Za-z.+-]+"' "$PYPROJECT"; then
+            sed -E -i 's/^(version\s*=\s*)"[0-9A-Za-z.+-]+"/\1"'"${VERSION}"'"/' "$PYPROJECT"
+          else
+            # add version under [project]
+            awk '1; /\[project\]/{print "version = \"'"${VERSION}"'\""}' "$PYPROJECT" > "$PYPROJECT".tmp && mv "$PYPROJECT".tmp "$PYPROJECT"
+          fi
+          git --no-pager diff -- "$PYPROJECT" || true
+          sed -n '1,120p' "$PYPROJECT" || true
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip build twine
+
+      - name: Build distribution
+        working-directory: packages/cereon-sdk
+        run: |
+          python -m build
+
+      - name: Publish to PyPI
+        working-directory: packages/cereon-sdk
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m twine upload --repository pypi dist/*
