@@ -10,8 +10,28 @@
 
 ### Installation
 
+Install the core SDK (no web framework):
+
 ```bash
 pip install cereon-sdk
+```
+
+Install with FastAPI support:
+
+```bash
+pip install "cereon-sdk[fastapi]"
+```
+
+Install with Django support:
+
+```bash
+pip install "cereon-sdk[django]"
+```
+
+Install both extras:
+
+```bash
+pip install "cereon-sdk[fastapi,django]"
 ```
 
 ### Basic Example
