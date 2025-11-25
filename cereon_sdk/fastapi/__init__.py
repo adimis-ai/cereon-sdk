@@ -54,5 +54,6 @@ __all__ = [
     "WebSocketHandlerContext",
 ]
 
-# package version (kept here so CI can update it easily)
-__version__ = "0.1.0"
+__all__.append("__version__")
+
+from .._version import __version__  # noqa: F401

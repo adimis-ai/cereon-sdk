@@ -3,53 +3,59 @@ name = "cereon_sdk"
 version = "0.1.5"
 description = "Generic, typed, and streaming backend SDK for Cereon Dashboard cards."
 requires-python = ">=3.10"
-authors = [
-  { name = "Aditya Mishra", email = "adimis.sde@gmail.com" }
-]
+authors = [{ name = "Aditya Mishra", email = "adimis.sde@gmail.com" }]
 readme = "README.md"
 license = { file = "LICENSE" }
 
 keywords = ["streaming", "sse", "websocket", "dashboard", "ndjson", "typed-api"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
   "License :: OSI Approved :: MIT License",
-  "Operating System :: OS Independent"
+  "Operating System :: OS Independent",
+  "Framework :: Django",
 ]
 
-# Base runtime dependencies
-dependencies = [
-  "pydantic>=2.6.0",
-  "typing-extensions>=4.9.0",
-]
+dependencies = ["pydantic>=2.6.0", "typing-extensions>=4.9.0"]
 
 [project.optional-dependencies]
 dev = [
   "pytest",
   "pytest-asyncio",
+  "pytest-django",
+  "pytest-cov",
   "ruff",
   "black",
+  "pre-commit",
 ]
 
-# Optional framework-specific extras
 fastapi = [
   "fastapi>=0.110.0",
+  "uvicorn>=0.22.0",
+  "orjson>=3.9.0; python_version >= '3.8'",
 ]
 
 django = [
   "Django>=4.2",
+  "djangorestframework>=3.14.0",
+  "channels>=4.0.0",
+  "asgiref>=3.8.0",
 ]
+
+all = ["fastapi", "django"]
 
 [project.urls]
 Homepage = "https://github.com/adimis-ai/cereon-sdk"
 Repository = "https://github.com/adimis-ai/cereon-sdk"
 Issues = "https://github.com/adimis-ai/cereon-sdk/issues"
 
-# uv build system (PEP 517)
 [build-system]
 requires = ["hatchling>=1.22.0"]
 build-backend = "hatchling.build"
 
-# Formatters / linters
+[tool.hatch.build.targets.wheel]
+packages = ["cereon_sdk"]
+
 [tool.black]
 line-length = 100
 target-version = ["py310", "py311", "py312"]

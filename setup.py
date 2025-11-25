@@ -14,17 +14,20 @@ def read_text(path: pathlib.Path) -> str:
 
 long_description = read_text(HERE / "README.md")
 
-# read version from package to avoid duplication
+
 def read_version() -> str:
+    import re
+
+    p = HERE / "cereon_sdk" / "_version.py"
     try:
-        # import package without importing heavy dependencies
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("cereon_sdk.version", HERE / "cereon_sdk" / "__init__.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)  # type: ignore
-        return getattr(mod, "__version__", "0.0.0")
+        txt = p.read_text(encoding="utf8")
+        m = re.search(r"^__version__\s*=\s*['\"]([^'\"]+)['\"]", txt, flags=re.M)
+        if m:
+            return m.group(1)
     except Exception:
-        return "0.0.0"
+        pass
+    return "0.0.0"
+
 
 setup(
     name="cereon_sdk",
