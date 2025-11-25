@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Python](https://img.shields.io/badge/Python-3.11-blue.svg?logo=python&logoColor=white)](https://www.python.org/) [![FastAPI](https://img.shields.io/badge/FastAPI-Ready-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 
-**Cereon SDK** is a high-performance, typed FastAPI framework for building real-time dashboard backends. Create interactive dashboard cards with support for HTTP, WebSocket, and Server-Sent Events (SSE) transport protocols.
+**Cereon SDK** is a lightweight, framework-agnostic Python SDK for building typed, real-time dashboard backends. It provides strongly-typed helpers and transport adapters for FastAPI and Django to create interactive dashboard cards, and supports HTTP, WebSocket, Server-Sent Events (SSE), and NDJSON streaming with validation, batching, and configurable error policies.
 
 ## 🚀 Quick Start
 
@@ -34,211 +34,106 @@ Install both extras:
 pip install "cereon-sdk[fastapi,django]"
 ```
 
-### Basic Example
+## Usage examples
 
-Create your first dashboard card in minutes:
+Below are minimal examples showing how to integrate Cereon SDK with FastAPI and Django. These are meant to be quick-start snippets — refer to the code in `cereon_sdk/fastapi` and `cereon_sdk/django` for full feature details.
+
+### FastAPI (HTTP + streaming)
 
 ```python
 from fastapi import FastAPI
-from cereon_sdk import BaseCard, ChartCardRecord
+from pydantic import BaseModel
+from cereon_sdk.fastapi.routes import make_streaming_route_typed
 
 app = FastAPI()
 
-class SalesCard(BaseCard[ChartCardRecord]):
-    kind = "line"
-    card_id = "sales_overview"
-    report_id = "dashboard"
-    route_prefix = "/api/cards"
-    response_model = ChartCardRecord
-    transport = "http"
+class Record(BaseModel):
+	id: int
+	value: float
 
-    @classmethod
-    async def handler(cls, ctx):
-        # Your data logic here
-        data = [
-            {"date": "2024-01-01", "sales": 1200},
-            {"date": "2024-01-02", "sales": 1350},
-        ]
+def handler(ctx):
+	# return an iterable or async iterable of items matching Record
+	for i in range(5):
+		yield {"id": i, "value": i * 1.5}
 
-        return [ChartCardRecord(
-            kind=cls.kind,
-            report_id=cls.report_id,
-            card_id=cls.card_id,
-            data=ChartCardData(data=data)
-        )]
+make_streaming_route_typed(app, "/stream", handler, response_model=Record, format="ndjson")
 
-# Register the card
-SalesCard(app).as_route(app=app)
+if __name__ == "__main__":
+	import uvicorn
+
+	uvicorn.run(app, host="127.0.0.1", port=8000)
 ```
 
-Access your card at: `GET /api/cards/sales_overview`
-
-## ✨ Key Features
-
-### 🏗️ **Multiple Transport Protocols**
-
-- **HTTP**: Traditional REST endpoints for static data
-- **WebSocket**: Real-time bidirectional communication
-- **Streaming HTTP**: Server-Sent Events for live data feeds
-
-### 📊 **Rich Card Types**
-
-- **Chart Cards**: Line, bar, area, pie, radar, and radial charts
-- **Table Cards**: Sortable, filterable data tables
-- **Number Cards**: KPIs with trend indicators
-- **Markdown Cards**: Rich text and documentation
-- **HTML/Iframe Cards**: Custom content embedding
-
-### 🔧 **Developer Experience**
-
-- **Type Safety**: Full Pydantic validation and type hints
-- **Auto-Generated Routes**: Minimal boilerplate code
-- **Flexible Data Sources**: Database, API, or custom integrations
-- **Error Handling**: Built-in resilience and graceful degradation
-
-## 📖 Documentation
-
-| Guide                                        | Description                                   |
-| -------------------------------------------- | --------------------------------------------- |
-| [Installation & Setup](docs/fastapi/installation.md) | Complete installation and configuration guide |
-| [Quick Start Tutorial](docs/fastapi/quickstart.md)   | Build your first dashboard in 10 minutes      |
-| [Card Types Reference](docs/fastapi/card-types.md)   | Complete guide to all supported card types    |
-| [Transport Protocols](docs/fastapi/transport.md)     | HTTP, WebSocket, and streaming patterns       |
-| [API Reference](docs/fastapi/api-reference.md)       | Complete SDK API documentation                |
-| [Deployment Guide](docs/fastapi/deployment.md)       | Production deployment strategies              |
-| [Examples](docs/fastapi/examples/)                   | Real-world implementation examples            |
-
-## 🏃‍♂️ Quick Examples
-
-### Real-time WebSocket Card
+### FastAPI (WebSocket)
 
 ```python
-class LivePricesCard(BaseCard[ChartCardRecord]):
-    transport = "websocket"
+from fastapi import FastAPI
+from pydantic import BaseModel
+from cereon_sdk.fastapi.routes import make_websocket_route_typed
 
-    @classmethod
-    async def handler(cls, ctx):
-        while True:
-            price_data = await fetch_live_prices()
-            yield ChartCardRecord(...)
-            await asyncio.sleep(1)
+app = FastAPI()
+
+class Record(BaseModel):
+	id: int
+	value: float
+
+async def ws_handler(ctx):
+	# ctx['websocket'] is a FastAPI WebSocket
+	# yield/return messages or push directly using websocket
+	for i in range(3):
+		yield {"id": i, "value": i * 2.0}
+
+make_websocket_route_typed(app, "/ws", ws_handler, response_model=Record)
 ```
 
-### Streaming HTTP Card
+### Django (DRF view)
+
+Create a DRF view by subclassing `BaseCardAPIView` in `cereon_sdk/django/views.py`.
+
+Subclasses must implement an instance method `handle(self, ctx)` (can be sync or async) and set
+`response_serializer` to a DRF `Serializer` class used to validate outgoing records.
 
 ```python
-class MetricsStreamCard(BaseCard[NumberCardRecord]):
-    transport = "streaming-http"
+from rest_framework import serializers
+from cereon_sdk.django.views import BaseCardAPIView
 
-    @classmethod
-    async def handler(cls, ctx):
-        async for metric in metrics_generator():
-            yield NumberCardRecord(...)
+class RecordSerializer(serializers.Serializer):
+	id = serializers.IntegerField()
+	value = serializers.FloatField()
+
+class MyCardView(BaseCardAPIView):
+	response_serializer = RecordSerializer
+
+	def handle(self, ctx):
+		# return a list or iterable (or a single record)
+		return [{"id": 1, "value": 3.14}]
 ```
 
-### Database Integration
+Add the view to your `urls.py` as you would any DRF view.
 
-```python
-class UserStatsCard(BaseCard[TableCardRecord]):
-    @classmethod
-    async def handler(cls, ctx):
-        async with database.transaction():
-            users = await User.fetch_analytics()
+## Development
 
-        return [TableCardRecord(
-            data=TableCardData(
-                rows=[u.dict() for u in users],
-                columns=["name", "signup_date", "activity"]
-            )
-        )]
-```
-
-## 🏗️ Architecture
-
-Cereon SDK follows a **card-based architecture** where each card represents a self-contained data visualization component:
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Dashboard     │◄───│   Cereon SDK    │◄───│  Data Sources   │
-│   Frontend      │    │   (FastAPI)     │    │  (DB/APIs/etc)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-        │                       │                       │
-        │                       │                       │
-    React Components       Card Classes            Your Logic
-```
-
-### Core Components
-
-- **BaseCard**: Abstract base class for all dashboard cards
-- **Transport Protocols**: HTTP, WebSocket, and streaming support
-- **Type System**: Pydantic models for validation and serialization
-- **Route Generation**: Automatic FastAPI route creation
-
-## 🔌 Integration with Cereon Dashboard
-
-Cereon SDK is designed to work seamlessly with [@cereon/dashboard](https://www.npmjs.com/package/@cereon/dashboard):
-
-**Backend (Python)**:
-
-```python
-# Your FastAPI card
-class RevenueCard(BaseCard[ChartCardRecord]):
-    # ... implementation
-```
-
-**Frontend (React)**:
-
-```tsx
-import { Dashboard } from "@cereon/dashboard";
-
-const spec = {
-  reports: [
-    {
-      reportCards: [
-        {
-          kind: "line",
-          query: {
-            variant: "http",
-            payload: { url: "/api/cards/revenue" },
-          },
-        },
-      ],
-    },
-  ],
-};
-
-<Dashboard state={{ spec }} />;
-```
-
-## 🧪 Testing
+To run tests and linters locally after installing dev extras:
 
 ```bash
-# Run tests
-pytest
-
-# With coverage
-pytest --cov=cereon_sdk
-
-# Integration tests
-pytest tests/integration/
+source .venv/bin/activate
+pip install -e .[dev]
+pytest -q
+ruff check .
+black .
 ```
 
-## 🤝 Contributing
+Pre-commit hooks are configured — run them before pushing:
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+```bash
+pre-commit install
+pre-commit run --all-files
+```
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Contributing
 
-## 📄 License
+See `CONTRIBUTING.md` for full guidelines on contributing, testing, and the release process.
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## License
 
-## 🆘 Support & Community
-
-- 📚 **Documentation**: [Full documentation](docs/)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/adimis-ai/cereon-sdk/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/adimis-ai/cereon-sdk/discussions)
+This project is licensed under the MIT License. See the `LICENSE` file for details.

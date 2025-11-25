@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Iterable, List, Optional, Type, Union, Callable
 
+from abc import ABC, abstractmethod
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, serializers
@@ -11,10 +12,9 @@ from rest_framework.request import Request as DRFRequest
 from .utils import parse_http_params
 
 RecordSerializer = Type[serializers.Serializer]
-Handler = Callable[[Dict[str, Any]], Union[List[Any], Iterable[Any], Any]]
 
 
-class BaseCardAPIView(APIView):
+class BaseCardAPIView(APIView, ABC):
     """
     Abstract DRF view that implements the 'http' transport contract.
 
@@ -27,21 +27,28 @@ class BaseCardAPIView(APIView):
                     - a single payload (will be validated)
     """
 
-    handler: Optional[Handler] = None
     response_serializer: Optional[RecordSerializer] = None
+
+    @abstractmethod
+    def handle(self, ctx: Dict[str, Any]) -> Union[List[Any], Iterable[Any], Any]:
+        """
+        Subclasses must implement `handle(self, ctx)` which may return:
+            - a list/iterable of payloads (will be materialized and validated)
+            - a single payload (will be validated)
+        """
+        raise NotImplementedError()
 
     @classmethod
     def _validate_contract(cls) -> None:
-        if cls.handler is None or not callable(cls.handler):
-            raise RuntimeError("handler must be defined and callable on the view subclass.")
+        if not hasattr(cls, "handle") or not callable(getattr(cls, "handle", None)):
+            raise RuntimeError("subclass must implement `handle(self, ctx)` on the view subclass.")
         if cls.response_serializer is None:
             raise RuntimeError(
                 "response_serializer (DRF Serializer) must be provided on the view subclass."
             )
 
-    @classmethod
-    async def _call_handler(cls, ctx: Dict[str, Any]) -> Any:
-        result = cls.handler(ctx)
+    async def _call_handler(self, ctx: Dict[str, Any]) -> Any:
+        result = self.handle(ctx)
         if asyncio.iscoroutine(result):
             return await result
         return result

@@ -1,6 +1,7 @@
 # cereon_sdk/django/consumers.py
 from __future__ import annotations
 import asyncio
+from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Iterable, Callable, Type
 
 
@@ -8,8 +9,6 @@ from rest_framework import serializers
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from .utils import parse_websocket_params_from_scope
-
-Handler = Callable[[Dict[str, Any]], Any]  # may return async iterable or coroutine
 
 
 def _now_iso() -> str:
@@ -45,7 +44,7 @@ def _ensure_async_iter(obj):
     return _single()
 
 
-class BaseCardConsumer(AsyncJsonWebsocketConsumer):
+class BaseCardConsumer(AsyncJsonWebsocketConsumer, ABC):
     """
     Channels consumer implementing the websocket transport contract.
 
@@ -55,7 +54,16 @@ class BaseCardConsumer(AsyncJsonWebsocketConsumer):
     """
 
     response_serializer: Optional[Type[serializers.Serializer]] = None
-    handler: Optional[Handler] = None
+
+    @abstractmethod
+    async def handle(self, ctx: Dict[str, Any]):
+        """
+        Subclasses must implement `async def handle(self, ctx)` which may:
+            - return an async iterable
+            - yield/return values directly
+        """
+        raise NotImplementedError()
+
     ack_policy: str = "auto"
     heartbeat_interval_sec: int = 30
     stream_error_policy: str = "skip"  # 'fail'|'skip'|'log'
@@ -107,7 +115,7 @@ class BaseCardConsumer(AsyncJsonWebsocketConsumer):
             )
 
             # ensure handler is running
-            if self.handler and (self.handler_task is None or self.handler_task.done()):
+            if (self.handler_task is None) or self.handler_task.done():
                 self.handler_task = asyncio.create_task(self._run_handler())
 
         elif action == "unsubscribe":
@@ -137,11 +145,9 @@ class BaseCardConsumer(AsyncJsonWebsocketConsumer):
                 "filters": self.params.get("filters"),
                 "active_subscriptions": self.active_subscriptions,
             }
-            result = (
-                self.handler(ctx)
-                if not asyncio.iscoroutinefunction(self.handler)
-                else await self.handler(ctx)
-            )
+            result = self.handle(ctx)
+            if asyncio.iscoroutine(result):
+                result = await result
             if result is None:
                 return
             async_iter = _ensure_async_iter(result)
