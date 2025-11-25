@@ -100,13 +100,13 @@ Access your card at: `GET /api/cards/sales_overview`
 
 | Guide                                        | Description                                   |
 | -------------------------------------------- | --------------------------------------------- |
-| [Installation & Setup](docs/installation.md) | Complete installation and configuration guide |
-| [Quick Start Tutorial](docs/quickstart.md)   | Build your first dashboard in 10 minutes      |
-| [Card Types Reference](docs/card-types.md)   | Complete guide to all supported card types    |
-| [Transport Protocols](docs/transport.md)     | HTTP, WebSocket, and streaming patterns       |
-| [API Reference](docs/api-reference.md)       | Complete SDK API documentation                |
-| [Deployment Guide](docs/deployment.md)       | Production deployment strategies              |
-| [Examples](docs/examples/)                   | Real-world implementation examples            |
+| [Installation & Setup](docs/fastapi/installation.md) | Complete installation and configuration guide |
+| [Quick Start Tutorial](docs/fastapi/quickstart.md)   | Build your first dashboard in 10 minutes      |
+| [Card Types Reference](docs/fastapi/card-types.md)   | Complete guide to all supported card types    |
+| [Transport Protocols](docs/fastapi/transport.md)     | HTTP, WebSocket, and streaming patterns       |
+| [API Reference](docs/fastapi/api-reference.md)       | Complete SDK API documentation                |
+| [Deployment Guide](docs/fastapi/deployment.md)       | Production deployment strategies              |
+| [Examples](docs/fastapi/examples/)                   | Real-world implementation examples            |
 
 ## 🏃‍♂️ Quick Examples
 
@@ -242,8 +242,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📚 **Documentation**: [Full documentation](docs/)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/adimis-ai/cereon-sdk/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/adimis-ai/cereon-sdk/discussions)
-- 🚀 **Examples**: [Live Examples](docs/examples/)
-
----
-
-_Need help getting started? Check out our [Quick Start Guide](docs/quickstart.md) or browse the [examples](docs/examples/)._
