@@ -40,7 +40,7 @@ Below are minimal examples showing how to integrate Cereon SDK with FastAPI and 
 
 ### FastAPI (HTTP + streaming)
 
-```python
+```py
 from fastapi import FastAPI
 from pydantic import BaseModel
 from cereon_sdk.fastapi.routes import make_streaming_route_typed
@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
 ### FastAPI (WebSocket)
 
-```python
+```py
 from fastapi import FastAPI
 from pydantic import BaseModel
 from cereon_sdk.fastapi.routes import make_websocket_route_typed
@@ -86,14 +86,44 @@ async def ws_handler(ctx):
 make_websocket_route_typed(app, "/ws", ws_handler, response_model=Record)
 ```
 
-### Django (DRF view)
+### FastAPI (HTTP plain)
+
+If you only need a simple HTTP endpoint that returns a JSON list (no streaming), use the regular FastAPI route helpers and return serializable data. The SDK helpers provide typed validation and convenience wrappers when desired.
+
+```py
+from fastapi import FastAPI
+from pydantic import BaseModel
+from cereon_sdk.fastapi.routes import make_route_typed
+
+app = FastAPI()
+
+class Record(BaseModel):
+    id: int
+    value: float
+
+def http_handler(ctx):
+    return [{"id": i, "value": i * 1.5} for i in range(3)]
+
+make_route_typed(app, "/http", http_handler, response_model=Record)
+```
+
+### FastAPI (NDJSON / Server Sent Events)
+
+The `make_streaming_route_typed` helper supports several streaming formats. Use `format="ndjson"` for newline-delimited JSON or `format="sse"` for Server-Sent Events. The handler may be an iterator or async iterator.
+
+```py
+make_streaming_route_typed(app, "/ndjson", handler, response_model=Record, format="ndjson")
+make_streaming_route_typed(app, "/sse", handler, response_model=Record, format="sse")
+```
+
+### Django (DRF APIView)
 
 Create a DRF view by subclassing `BaseCardAPIView` in `cereon_sdk/django/views.py`.
 
 Subclasses must implement an instance method `handle(self, ctx)` (can be sync or async) and set
 `response_serializer` to a DRF `Serializer` class used to validate outgoing records.
 
-```python
+```py
 from rest_framework import serializers
 from cereon_sdk.django.views import BaseCardAPIView
 
@@ -107,6 +137,29 @@ class MyCardView(BaseCardAPIView):
 	def handle(self, ctx):
 		# return a list or iterable (or a single record)
 		return [{"id": 1, "value": 3.14}]
+```
+
+Add the view to your `urls.py` as you would any DRF view.
+
+### Django (WebSocket - Channels)
+
+If you're using Django Channels for WebSocket support, implement a consumer that uses the SDK helpers to validate and emit messages. The SDK provides utilities in `cereon_sdk.django.utils` to assist integration.
+
+```py
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from cereon_sdk.django.utils import validate_and_send
+
+class CardConsumer(AsyncJsonWebsocketConsumer):
+	async def connect(self):
+		await self.accept()
+
+	async def receive_json(self, content):
+		# handle incoming message and optionally send back typed records
+		records = [{"id": 1, "value": 2.5}]
+		await validate_and_send(self.send_json, records)
+
+	async def disconnect(self, close_code):
+		pass
 ```
 
 Add the view to your `urls.py` as you would any DRF view.
