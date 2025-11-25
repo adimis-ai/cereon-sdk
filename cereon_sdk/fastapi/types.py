@@ -1,4 +1,4 @@
-# cereon_sdk/cereon_sdk/core/types.py
+# cereon_sdk/fastapi/types.py
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union, Literal
 
 from pydantic import BaseModel, Field, ConfigDict

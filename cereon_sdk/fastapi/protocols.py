@@ -1,4 +1,4 @@
-# cereon_sdk/cereon_sdk/core/protocols.py
+# cereon_sdk/fastapi/protocols.py
 from __future__ import annotations
 from pydantic import BaseModel
 from abc import ABC, abstractmethod

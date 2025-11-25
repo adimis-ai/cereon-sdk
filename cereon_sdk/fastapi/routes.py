@@ -1,4 +1,4 @@
-# cereon_sdk/cereon_sdk/core/routes.py
+# cereon_sdk/fastapi/routes.py
 from __future__ import annotations
 import json
 import asyncio
