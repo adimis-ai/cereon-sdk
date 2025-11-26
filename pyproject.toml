@@ -1,6 +1,6 @@
 [project]
 name = "cereon_sdk"
-version = "0.1.6"
+version = "0.1.7"
 description = "Generic, typed, and streaming backend SDK for Cereon Dashboard cards."
 requires-python = ">=3.10"
 authors = [{ name = "Aditya Mishra", email = "adimis.sde@gmail.com" }]
