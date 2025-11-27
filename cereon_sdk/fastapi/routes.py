@@ -137,10 +137,16 @@ def make_http_route_typed(
 
     async def endpoint(request: Request):
         params = await parse_http_params(request)
+        # Normalize: if parse_http_params returned wrapper {"params": {...}}, unwrap it
+        if isinstance(params, dict) and "params" in params and isinstance(params["params"], dict):
+            resolved_params = params["params"]
+        else:
+            resolved_params = params if isinstance(params, dict) else {}
+
         ctx = {
             "request": request,
-            "params": params,
-            "filters": params.get("filters", None),
+            "params": resolved_params,
+            "filters": (resolved_params.get("filters") if isinstance(resolved_params, dict) else None),
         }
         result = handler(ctx) if not is_async_callable(handler) else await handler(ctx)
 
@@ -199,10 +205,15 @@ def make_streaming_route_typed(
 
     async def endpoint(request: Request):
         params = await parse_http_params(request)
+        if isinstance(params, dict) and "params" in params and isinstance(params["params"], dict):
+            resolved_params = params["params"]
+        else:
+            resolved_params = params if isinstance(params, dict) else {}
+
         ctx = {
             "request": request,
-            "params": params,
-            "filters": params.get("filters", None),
+            "params": resolved_params,
+            "filters": (resolved_params.get("filters") if isinstance(resolved_params, dict) else None),
         }
         # call handler
         result = handler(ctx) if not is_async_callable(handler) else await handler(ctx)
@@ -372,10 +383,15 @@ def make_websocket_route_typed(
         try:
             # Parse initial connection params
             params = await parse_websocket_params(ws)
+            if isinstance(params, dict) and "params" in params and isinstance(params["params"], dict):
+                resolved_params = params["params"]
+            else:
+                resolved_params = params if isinstance(params, dict) else {}
+
             ctx = {
                 "websocket": ws,
-                "params": params,
-                "filters": params.get("filters", None),
+                "params": resolved_params,
+                "filters": (resolved_params.get("filters") if isinstance(resolved_params, dict) else None),
             }
 
             async def send_message(message: Dict[str, Any]) -> None:

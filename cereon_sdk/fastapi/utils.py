@@ -1,9 +1,13 @@
 # cereon_sdk/fastapi/utils.py
 import json
+import logging
 import urllib.parse
 from typing import Any, Dict
 
 from fastapi import Request, WebSocket, WebSocketDisconnect, HTTPException
+
+# module logger
+logger = logging.getLogger(__name__)
 
 
 def _maybe_decode_json_str(value: Any) -> Any:
@@ -13,17 +17,35 @@ def _maybe_decode_json_str(value: Any) -> Any:
     """
     if isinstance(value, str):
         v = value.strip()
-        # quick heuristic: starts with { or [ or " or digits/true/false/null
-        if v.startswith(("{", "[", '"')) or v in ("true", "false", "null") or v[:1].isdigit():
-            try:
-                parsed = json.loads(v)
-            except Exception:
-                # fallback: sometimes encoded as a JSON string of a JSON string (double-encoded)
+
+        # Attempt multiple decode/unquote passes to handle double-encoded values
+        for _ in range(3):
+            # quick heuristic: if it looks like JSON try to parse
+            if v.startswith(("{", "[", '"')) or v in ("true", "false", "null") or (v and v[0].isdigit()):
                 try:
-                    parsed = json.loads(json.loads(v))
+                    return json.loads(v)
                 except Exception:
-                    return value
-            return parsed
+                    # try to strip surrounding quotes then parse
+                    if v.startswith('"') and v.endswith('"'):
+                        v_inner = v[1:-1]
+                        try:
+                            return json.loads(v_inner)
+                        except Exception:
+                            pass
+            # not parsed yet — try unquoting percent-encoding and loop
+            try:
+                v_unq = urllib.parse.unquote_plus(v)
+            except Exception:
+                break
+            # if unquoting didn't change the string, break to avoid infinite loop
+            if v_unq == v:
+                break
+            v = v_unq
+        # Final attempt: try json.loads on the last value
+        try:
+            return json.loads(v)
+        except Exception:
+            return value
     return value
 
 
@@ -42,6 +64,7 @@ async def parse_http_params(request: Request) -> Dict[str, Any]:
     - Always attempt robust decoding (double-encoded JSON) and return a plain Dict[str, Any].
     - On parse failure, raises HTTPException(400).
     """
+    logger.debug("parse_http_params: incoming request method=%s, url=%s", request.method, getattr(request, 'url', None))
     # Start with query params (they are always available)
     qs_bytes = request.scope.get("query_string", b"")
     qs = qs_bytes.decode("utf-8") if isinstance(qs_bytes, (bytes, bytearray)) else str(qs_bytes)
@@ -59,9 +82,16 @@ async def parse_http_params(request: Request) -> Dict[str, Any]:
     if "params" in normalized_query:
         try:
             decoded = _maybe_decode_json_str(normalized_query["params"])
+            logger.debug("parse_http_params: found 'params' in query (raw)=%s decoded=%s", normalized_query["params"], decoded)
+            # If client accidentally double-wrapped as {"params": {...}}, unwrap
+            if isinstance(decoded, dict) and "params" in decoded and isinstance(decoded["params"], dict):
+                logger.debug("parse_http_params: unwrapped nested 'params' dict -> %s", decoded["params"])
+                return decoded["params"]
             if isinstance(decoded, dict):
+                logger.debug("parse_http_params: returning decoded dict from query params -> %s", decoded)
                 return decoded
             # if params is something else (like list) put under key "params"
+            logger.debug("parse_http_params: returning wrapped params -> %s", {"params": decoded})
             return {"params": decoded}
         except Exception as e:
             raise HTTPException(
@@ -83,6 +113,7 @@ async def parse_http_params(request: Request) -> Dict[str, Any]:
 
         if body is None:
             # fallback to query string only
+            logger.debug("parse_http_params: body empty, returning normalized query -> %s", normalized_query)
             return normalized_query
 
         # if body contains "params"
@@ -90,18 +121,25 @@ async def parse_http_params(request: Request) -> Dict[str, Any]:
             params_val = body["params"]
             # the client sometimes sends {"params": "<json-string>"}
             maybe = _maybe_decode_json_str(params_val)
+            logger.debug("parse_http_params: found 'params' in body (raw)=%s decoded=%s", params_val, maybe)
             if isinstance(maybe, dict):
+                logger.debug("parse_http_params: returning decoded dict from body 'params' -> %s", maybe)
                 return maybe
+            logger.debug("parse_http_params: returning wrapped body params -> %s", {"params": maybe})
             return {"params": maybe}
 
         # if body looks already like a params dict
         if isinstance(body, dict):
+            logger.debug("parse_http_params: returning body as params -> %s", body)
             return body
 
         # other types (list, string) -> wrap
-        return {"params": _maybe_decode_json_str(body)}
+        wrapped = {"params": _maybe_decode_json_str(body)}
+        logger.debug("parse_http_params: returning wrapped non-dict body -> %s", wrapped)
+        return wrapped
 
     # Fallback: return normalized query dict (no 'params' found)
+    logger.debug("parse_http_params: fallback returning normalized_query -> %s", normalized_query)
     return normalized_query
 
 
@@ -119,6 +157,7 @@ async def parse_websocket_params(
        - Accept a JSON message that contains the payload (common server/client patterns).
     4. Return a payload dict (possibly empty) — caller should validate required fields like 'url'.
     """
+    logger.debug("parse_websocket_params: incoming websocket scope path=%s client=%s", websocket.scope.get('path'), websocket.client)
     # parse query string
     qs_bytes = websocket.scope.get("query_string", b"")
     qs = qs_bytes.decode("utf-8") if isinstance(qs_bytes, (bytes, bytearray)) else str(qs_bytes)
@@ -133,8 +172,15 @@ async def parse_websocket_params(
     if "params" in query:
         raw = _single(query["params"])
         decoded = _maybe_decode_json_str(raw)
+        logger.debug("parse_websocket_params: found 'params' in query (raw)=%s decoded=%s", raw, decoded)
+        # unwrap accidental nested payloads {"params": {...}}
+        if isinstance(decoded, dict) and "params" in decoded and isinstance(decoded["params"], dict):
+            logger.debug("parse_websocket_params: unwrapped nested 'params' dict -> %s", decoded["params"])
+            return decoded["params"]
         if isinstance(decoded, dict):
+            logger.debug("parse_websocket_params: returning decoded dict from query params -> %s", decoded)
             return decoded
+        logger.debug("parse_websocket_params: returning wrapped params -> %s", {"params": decoded})
         return {"params": decoded}
 
     # Map common websocket payload keys (strings come from querystring)
@@ -164,7 +210,8 @@ async def parse_websocket_params(
                     except Exception:
                         payload[key] = v
             else:
-                payload[key] = _maybe_decode_json_str(v)
+                        payload[key] = _maybe_decode_json_str(v)
+                        logger.debug("parse_websocket_params: mapped key=%s value=%s", key, payload[key])
 
     # Handle potential header-like query params (headers.<name>=value)
     headers = {}
@@ -174,9 +221,11 @@ async def parse_websocket_params(
             headers[header_name] = _single(qv)
     if headers:
         payload["headers"] = headers
+        logger.debug("parse_websocket_params: mapped headers=%s", headers)
 
     # If we already found meaningful fields, return
     if payload:
+        logger.debug("parse_websocket_params: returning payload from query mapping -> %s", payload)
         return payload
 
     # Optional: consume first JSON message from client to extract params (only when explicitly requested)
@@ -186,24 +235,31 @@ async def parse_websocket_params(
             try:
                 parsed = json.loads(message)
             except Exception:
+                logger.debug("parse_websocket_params: initial message not JSON, returning raw initialMessage=%s", message)
                 # not JSON -> return as raw string under 'initialMessage'
                 return {"initialMessage": message}
             # If parsed has 'params' or is dict, process same as HTTP
             if isinstance(parsed, dict):
                 if "params" in parsed:
-                    return (
-                        _maybe_decode_json_str(parsed["params"])
-                        if isinstance(parsed["params"], str)
-                        else parsed["params"]
-                    )
+                    maybe = parsed["params"]
+                    maybe = _maybe_decode_json_str(maybe) if isinstance(maybe, str) else maybe
+                    logger.debug("parse_websocket_params: initial message contained 'params' raw=%s decoded=%s", parsed["params"], maybe)
+                    if isinstance(maybe, dict):
+                        logger.debug("parse_websocket_params: returning decoded dict from initial message -> %s", maybe)
+                        return maybe
+                    logger.debug("parse_websocket_params: returning wrapped initial message params -> %s", {"params": maybe})
+                    return {"params": maybe}
                 # Map keys directly
+                logger.debug("parse_websocket_params: returning parsed initial message dict -> %s", parsed)
                 return parsed
             # otherwise wrap
+            logger.debug("parse_websocket_params: returning wrapped initialMessage -> %s", {"initialMessage": parsed})
             return {"initialMessage": parsed}
         except WebSocketDisconnect:
             raise
         except Exception:
             # unable to read; return empty payload
+            logger.debug("parse_websocket_params: failed to receive initial message, returning empty payload")
             return {}
 
     # Nothing found

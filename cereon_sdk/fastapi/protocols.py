@@ -30,6 +30,50 @@ from .routes import (
 )
 
 
+def _get_filters_from_ctx(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Normalize and return the filters dict from common ctx shapes used by handlers.
+
+    Handles shapes produced by the SDK routes and by external callers:
+    - None -> None
+    - dict with 'filters' or 'params' at top-level
+    - dict with 'request' key containing a dict with 'filters'/'params'
+    - dict with 'websocket' key containing 'params'/'filters'
+    Returns None when no filters found or ctx not recognized.
+    """
+    if not ctx:
+        return None
+
+    if isinstance(ctx, dict):
+        # direct filters
+        if "filters" in ctx and isinstance(ctx.get("filters"), dict):
+            return ctx.get("filters")
+
+        # direct params
+        if "params" in ctx and isinstance(ctx.get("params"), dict):
+            params = ctx.get("params")
+            if "filters" in params and isinstance(params.get("filters"), dict):
+                return params.get("filters")
+            return params
+
+        # nested under 'request' or 'websocket' key
+        for key in ("request", "websocket"):
+            item = ctx.get(key)
+            if isinstance(item, dict):
+                if "filters" in item and isinstance(item.get("filters"), dict):
+                    return item.get("filters")
+                if "params" in item and isinstance(item.get("params"), dict):
+                    params = item.get("params")
+                    if "filters" in params and isinstance(params.get("filters"), dict):
+                        return params.get("filters")
+                    return params
+
+        # fallback: return top-level filters if present
+        if "filters" in ctx and isinstance(ctx.get("filters"), dict):
+            return ctx.get("filters")
+
+    return None
+
+
 class BaseCard(ABC, Generic[RecordType]):
     """
     Protocol for dashboard card handlers.
@@ -84,6 +128,15 @@ class BaseCard(ABC, Generic[RecordType]):
             return is_asyncgen or is_coro
         else:
             return False
+
+    @classmethod
+    def _get_filters_from_ctx(cls, ctx: Any) -> Optional[Dict[str, Any]]:
+        """Classmethod wrapper exposing the module-level helper for subclasses.
+
+        Allows callers to use `MyCard._get_filters_from_ctx(ctx)` to normalize
+        extraction of `filters` from the various context shapes.
+        """
+        return _get_filters_from_ctx(ctx)
 
     @classmethod
     async def _http_handler(cls, request: Request) -> List[RecordType]:
@@ -259,10 +312,11 @@ class BaseCard(ABC, Generic[RecordType]):
                 response_model=cls.response_model,
                 stream_error_policy=stream_error_policy,
             )
+
         # websocket - create a handler wrapper that calls the class handler
         async def websocket_handler_wrapper(ctx: WebSocketHandlerContext):
             return await cls._websocket_handler(ctx)
-        
+
         return make_websocket_route_typed(
             path=path,
             app=use_app,
@@ -272,3 +326,4 @@ class BaseCard(ABC, Generic[RecordType]):
             response_model=cls.response_model,
             stream_error_policy=stream_error_policy,
         )
+

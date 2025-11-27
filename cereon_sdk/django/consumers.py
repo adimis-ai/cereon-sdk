@@ -71,7 +71,11 @@ class BaseCardConsumer(AsyncJsonWebsocketConsumer, ABC):
     async def connect(self):
         await self.accept()
         # parse params from scope querystring (non-blocking)
-        self.params = await parse_websocket_params_from_scope(self.scope)
+        params = await parse_websocket_params_from_scope(self.scope)
+        if isinstance(params, dict) and "params" in params and isinstance(params["params"], dict):
+            self.params = params["params"]
+        else:
+            self.params = params if isinstance(params, dict) else {}
         self.active_subscriptions: Dict[str, Dict[str, Any]] = {}
         self.handler_task = None
         self.heartbeat_task = None

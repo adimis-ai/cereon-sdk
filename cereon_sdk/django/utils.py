@@ -16,14 +16,28 @@ def _maybe_decode_json_str(value: Any) -> Any:
     """
     if isinstance(value, str):
         v = value.strip()
-        if v.startswith(("{", "[", '"')) or v in ("true", "false", "null") or (v and v[0].isdigit()):
-            try:
-                return json.loads(v)
-            except Exception:
+
+        for _ in range(3):
+            if v.startswith(("{", "[", '"')) or v in ("true", "false", "null") or (v and v[0].isdigit()):
                 try:
-                    return json.loads(json.loads(v))
+                    return json.loads(v)
                 except Exception:
-                    return value
+                    if v.startswith('"') and v.endswith('"'):
+                        try:
+                            return json.loads(v[1:-1])
+                        except Exception:
+                            pass
+            try:
+                v_unq = urllib.parse.unquote_plus(v)
+            except Exception:
+                break
+            if v_unq == v:
+                break
+            v = v_unq
+        try:
+            return json.loads(v)
+        except Exception:
+            return value
     return value
 
 
@@ -69,6 +83,9 @@ async def parse_http_params(request: Union[DRFRequest, HttpRequest]) -> Dict[str
     if "params" in normalized_query:
         try:
             decoded = _maybe_decode_json_str(normalized_query["params"])
+            # unwrap accidental nested {"params": {...}}
+            if isinstance(decoded, dict) and "params" in decoded and isinstance(decoded["params"], dict):
+                return decoded["params"]
             if isinstance(decoded, dict):
                 return decoded
             return {"params": decoded}
@@ -99,7 +116,8 @@ async def parse_http_params(request: Union[DRFRequest, HttpRequest]) -> Dict[str
             return normalized_query
 
         if isinstance(data, dict) and "params" in data:
-            maybe = _maybe_decode_json_str(data["params"])
+            maybe = data["params"]
+            maybe = _maybe_decode_json_str(maybe) if isinstance(maybe, str) else maybe
             if isinstance(maybe, dict):
                 return maybe
             return {"params": maybe}

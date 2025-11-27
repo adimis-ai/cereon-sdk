@@ -14,6 +14,34 @@ from .utils import parse_http_params
 RecordSerializer = Type[serializers.Serializer]
 
 
+def _get_filters_from_ctx(ctx: Any) -> Optional[Dict[str, Any]]:
+    """Normalize and return the filters dict from various ctx shapes used in handlers.
+
+    Mirrors the helper defined in the FastAPI protocols module so handler implementations
+    can rely on a predictable `filters` dict regardless of how the view/route constructed ctx.
+    """
+    if not ctx:
+        return None
+    if isinstance(ctx, dict):
+        if "filters" in ctx and isinstance(ctx.get("filters"), dict):
+            return ctx.get("filters")
+        if "params" in ctx and isinstance(ctx.get("params"), dict):
+            params = ctx.get("params")
+            if "filters" in params and isinstance(params.get("filters"), dict):
+                return params.get("filters")
+            return params
+        req = ctx.get("request")
+        if isinstance(req, dict):
+            if "filters" in req and isinstance(req.get("filters"), dict):
+                return req.get("filters")
+            if "params" in req and isinstance(req.get("params"), dict):
+                params = req.get("params")
+                if "filters" in params and isinstance(params.get("filters"), dict):
+                    return params.get("filters")
+                return params
+    return None
+
+
 class BaseCardAPIView(APIView, ABC):
     """
     Abstract DRF view that implements the 'http' transport contract.
@@ -28,6 +56,15 @@ class BaseCardAPIView(APIView, ABC):
     """
 
     response_serializer: Optional[RecordSerializer] = None
+
+    @classmethod
+    def _get_filters_from_ctx(cls, ctx: Any) -> Optional[Dict[str, Any]]:
+        """Classmethod wrapper to expose the module-level helper to subclasses.
+
+        Subclasses and external callers can call `MyView._get_filters_from_ctx(ctx)`
+        to normalize filter extraction from various handler contexts.
+        """
+        return _get_filters_from_ctx(ctx)
 
     @abstractmethod
     def handle(self, ctx: Dict[str, Any]) -> Union[List[Any], Iterable[Any], Any]:
@@ -68,7 +105,16 @@ class BaseCardAPIView(APIView, ABC):
 
     async def _get_ctx(self, request: DRFRequest) -> Dict[str, Any]:
         params = await parse_http_params(request._request)
-        return {"request": request._request, "params": params, "filters": params.get("filters")}
+        if isinstance(params, dict) and "params" in params and isinstance(params["params"], dict):
+            resolved_params = params["params"]
+        else:
+            resolved_params = params if isinstance(params, dict) else {}
+
+        return {
+            "request": request._request,
+            "params": resolved_params,
+            "filters": resolved_params.get("filters"),
+        }
 
     async def get(self, request: DRFRequest, *args, **kwargs):
         """
