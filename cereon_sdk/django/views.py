@@ -29,7 +29,9 @@ def _get_filters_from_ctx(ctx: Any) -> Optional[Dict[str, Any]]:
             params = ctx.get("params")
             if "filters" in params and isinstance(params.get("filters"), dict):
                 return params.get("filters")
-            return params
+            # If params is empty, prefer checking nested 'request' dict for filters
+            if params:
+                return params
         req = ctx.get("request")
         if isinstance(req, dict):
             if "filters" in req and isinstance(req.get("filters"), dict):
@@ -38,7 +40,9 @@ def _get_filters_from_ctx(ctx: Any) -> Optional[Dict[str, Any]]:
                 params = req.get("params")
                 if "filters" in params and isinstance(params.get("filters"), dict):
                     return params.get("filters")
-                return params
+                # Only return non-empty params; otherwise continue searching
+                if params:
+                    return params
     return None
 
 

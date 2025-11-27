@@ -53,7 +53,9 @@ def _get_filters_from_ctx(ctx: Any) -> Optional[Dict[str, Any]]:
             params = ctx.get("params")
             if "filters" in params and isinstance(params.get("filters"), dict):
                 return params.get("filters")
-            return params
+            # If params is empty, prefer checking nested 'request'/'websocket' keys
+            if params:
+                return params
 
         # nested under 'request' or 'websocket' key
         for key in ("request", "websocket"):
